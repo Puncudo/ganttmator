@@ -243,16 +243,21 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;
 input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.2)}
 input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--accent);border:3px solid var(--surface);box-shadow:0 1px 6px rgba(0,0,0,.2);cursor:pointer}
 @media(max-width:768px){
-  :root{--sw:110px!important;}
-  #plbl,#qnav,#btn-ev,#btn-sc,#dd-files{display:none!important;}
+  #qnav,#btn-ev,#btn-sc,#dd-files{display:none!important;}
   #sb,#sb-toggle{display:none!important;}
-  .rl{font-size:9px!important;padding:3px 6px!important;align-items:center!important;justify-content:flex-end!important;text-align:right!important;height:auto!important;overflow:hidden!important;line-height:1.3!important;}
-  .ls{display:-webkit-box!important;-webkit-line-clamp:2!important;-webkit-box-orient:vertical!important;overflow:hidden!important;text-overflow:ellipsis!important;font-size:9px!important;text-align:right!important;max-width:100%!important;white-space:normal!important;line-height:1.3!important;}
-  .grow{height:auto!important;}
-  .sc-acts{display:none!important;}
-  .dh{display:none!important;}
-  .md{width:95vw!important;max-width:95vw!important;}
+  #plbl{display:inline-flex!important;width:auto!important;min-width:0!important;max-width:calc(100vw - 120px)!important;}
+  /* Legend wraps on mobile */
+  #legend{height:auto!important;overflow:hidden!important;}
+  #legend-stub{flex-wrap:wrap!important;white-space:normal!important;height:auto!important;padding:3px 8px!important;gap:4px!important;transform:none!important;will-change:auto!important;}
   #tb{padding:0 8px;gap:6px;}
+  .sc-acts,.dh{display:none!important;}
+  .md{width:95vw!important;max-width:95vw!important;}
+  .rl{font-size:9px!important;padding:2px 5px!important;}
+  .ls{display:-webkit-box!important;-webkit-line-clamp:2!important;-webkit-box-orient:vertical!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:normal!important;font-size:9px!important;line-height:1.3!important;}
+  /* Hide excel settings in settings modal */
+  #xls-settings-col{display:none!important;}
+  /* Hide new gantt button and form on mobile - view only */
+  #prj-new-btn,#prj-form-wrap{display:none!important;}
 }
 </style>
 </head>
@@ -382,7 +387,7 @@ input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;bac
     <div id="prj-list-wrap">
       <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">הגאנטים שלי</div>
       <div id="prj-list" style="display:flex;flex-direction:column;gap:4px;max-height:320px;overflow-y:auto;margin-bottom:14px"></div>
-      <button class="btn bp" style="width:100%" onclick="oPrj(true)">+ גאנט חדש</button>
+      <button id="prj-new-btn" class="btn bp" style="width:100%" onclick="oPrj(true)">+ גאנט חדש</button>
     </div>
 
     <!-- Create/Edit form -->
@@ -658,7 +663,7 @@ input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;bac
       </div>
 
       <!-- LEFT COLUMN: Excel settings -->
-      <div style="flex:1;min-width:0;border-right:1px solid var(--border);padding-right:24px">
+      <div id="xls-settings-col" style="flex:1;min-width:0;border-right:1px solid var(--border);padding-right:24px">
         <div style="font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">הצגה באקסל</div>
         <div id="xls-cols"></div>
       </div>
@@ -835,6 +840,8 @@ var tPhoto=null,swPer=COLORS[0],swTk=COLORS[0],swTkIsCustom=false;
 var pDragFrom=null,sDragFrom=null;
 
 function init(){
+  // Set sidebar width immediately before any rendering
+  document.documentElement.style.setProperty('--sw', isMobile()?'110px':'240px');
   var s=localStorage.getItem('g5');
   if(s){try{S=JSON.parse(s);}catch(e){}}
   if(!S.vs)S.vs={year:new Date().getFullYear(),q:1,numQ:4};
@@ -891,7 +898,6 @@ function init(){
     }
   });
   fmSel('sm',1);fmSel('em',1);fmSel('evm1',1);fmSel('evm2',1);
-  if(isMobile())document.documentElement.style.setProperty('--sw','110px');
   // Try auto-load data.json from same folder
   try{
     fetch('data.json?_='+Date.now())
@@ -907,23 +913,13 @@ function init(){
 
 function save(){localStorage.setItem('g5',JSON.stringify(S));}
 function isMobile(){return window.innerWidth<=768;}
-function calcMobileSW(p){
-  var canvas=document.createElement('canvas');
-  var ctx=canvas.getContext('2d');
-  ctx.font='700 9px Heebo,sans-serif';
-  var min=50,max=110,longest=min;
-  (p.scopes||[]).forEach(function(sc){
-    var w=ctx.measureText(sc.name).width+16;
-    if(w>longest)longest=w;
-  });
-  return Math.min(max,Math.ceil(longest));
-}
+var _resizeTimer=null;
 window.addEventListener('resize',function(){
-  _cachedSW=0;
-  var sw=isMobile()?110:240;
-  document.documentElement.style.setProperty('--sw',sw+'px');
-  var sbBody=document.getElementById('sb-body');
-  if(sbBody)sbBody.style.width=sw+'px';
+  clearTimeout(_resizeTimer);
+  _resizeTimer=setTimeout(function(){
+    _cachedSW=0;
+    rAll();
+  },150);
 });
 function pr(){return S.projects.find(function(p){return p.id===S.activeId;})||null;}
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
@@ -1093,14 +1089,15 @@ function rBody(p){
   body.innerHTML='';
   var vr=viewRange();
 
-  // Sidebar width fixed — no dynamic recalculation
+  // Sidebar width — 110px mobile, 240px desktop
   var sw=isMobile()?110:240;
   if(sw!==_cachedSW){
     _cachedSW=sw;
-    document.documentElement.style.setProperty('--sw',sw+'px');
-    var sbBody=document.getElementById('sb-body');
-    if(sbBody)sbBody.style.width=sw+'px';
   }
+  // Always apply — don't rely on cache to skip
+  document.documentElement.style.setProperty('--sw',sw+'px');
+  var sbBody=document.getElementById('sb-body');
+  if(sbBody)sbBody.style.width=sw+'px';
 
   // Events row — always shown
   var evList=p.events||[];
@@ -1122,7 +1119,9 @@ function rBody(p){
     var row=mkRow(true);
     row.style.height=rowH+'px';row.style.minHeight=rowH+'px';
     row.style.position='sticky';
-    row.style.top='106px';
+    var legendEl=document.getElementById('legend');
+    var legendH=legendEl?legendEl.getBoundingClientRect().height:32;
+    row.style.top=(74+legendH)+'px';
     row.style.zIndex='20';
     row.style.boxShadow='0 2px 6px rgba(0,0,0,.08)';
     var lbl=row.querySelector('.rl');
@@ -1133,7 +1132,7 @@ function rBody(p){
     rc.style.position='relative';
     rc.style.cursor='pointer';
     rc.title='לחץ ליצירת אירוע חדש';
-    rc.addEventListener('click',function(e){if(!e.target.closest('.ebar'))oEv();});
+    rc.addEventListener('click',function(e){if(!isMobile()&&!e.target.closest('.ebar'))oEv();});
     fillCells(rc,'__ev__','evgroup');
     for(var ti=0;ti<tracks.length;ti++){
       var track=tracks[ti];
@@ -1158,7 +1157,7 @@ function rBody(p){
           b.addEventListener('mouseenter',function(){b.querySelectorAll('.rh').forEach(function(h){h.style.opacity='1';});});
           b.addEventListener('mouseleave',function(){b.querySelectorAll('.rh').forEach(function(h){h.style.opacity='0';});});
           b.addEventListener('mousedown',function(e2){onEvBMD(e2,cid);});
-          b.addEventListener('click',function(e2){e2.stopPropagation();oEv(cid);});
+          b.addEventListener('click',function(e2){e2.stopPropagation();if(!isMobile())oEv(cid);});
         })(bar,cev.id);
         rc.appendChild(bar);
       }
@@ -1199,12 +1198,7 @@ function rBody(p){
     var scRowH=count*barH;
     scRowH=Math.max(barH,scRowH);
     var scRow=mkRow(false);
-    if(isMobile()){
-      scRow.style.minHeight=scRowH+'px';
-      scRow.style.height='auto';
-    } else {
-      scRow.style.height=scRowH+'px';scRow.style.minHeight=scRowH+'px';scRow.style.maxHeight=scRowH+'px';
-    }
+    scRow.style.height=scRowH+'px';scRow.style.minHeight=scRowH+'px';scRow.style.maxHeight=scRowH+'px';
 
     // Topic side bar class - all valid topics get overlay
     var topicIds2=(p.topics||[]).map(function(t){return t.id;});
@@ -1647,7 +1641,7 @@ function drawDeps(p){
   }
 }
 
-function onEvBMD(e,evId){if(isMobile())return;
+function onEvBMD(e,evId){if(isMobile())return; // block drag on mobile, click still works via separate listener
   var isR=e.target.classList.contains('rh');
   var p=pr();if(!p)return;
   var ev=(p.events||[]).find(function(x){return x.id===evId;});
@@ -1834,7 +1828,8 @@ function propagateDeps(p){
   }
 }
 
-function onCell(col,id,type){if(isMobile())return;
+function onCell(col,id,type){
+  if(isMobile()&&type!=='ev')return; // on mobile only allow event creation, not task
   if(type==='sc'){
     var pos=colToAbs(col);
     if(pos)oTk(null,id,pos);
@@ -2274,8 +2269,7 @@ function rPrjList(){
       +'<div style="font-size:18px">📊</div>'
       +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+p2.name+'</div><div style="font-size:10px;color:var(--text3)">'+(p2.scopes||[]).length+' תכולות · '+tasks+' משימות</div></div>'
       +(isActive?'<div style="font-size:10px;font-weight:700;color:var(--accent)">פעיל</div>':'')
-      +'<button class="ib" onclick="event.stopPropagation();editPrj(\''+p2.id+'\')" title="ערוך שם">✏️</button>'
-      +'<button class="ib" onclick="event.stopPropagation();conf(\'מחק פרויקט\',\'האם למחוק את הפרויקט \''+p2.name+'\' וכל תכולותיו?\',function(){delPrj(\''+p2.id+'\')})" title="מחק">🗑️</button>'
+      +(isMobile()?'':'<button class="ib" onclick="event.stopPropagation();editPrj(\''+p2.id+'\')" title="ערוך שם">✏️</button><button class="ib" onclick="event.stopPropagation();conf(\'מחק פרויקט\',\'האם למחוק את הפרויקט \''+p2.name+'\' וכל תכולותיו?\',function(){delPrj(\''+p2.id+'\')})" title="מחק">🗑️</button>')
       +'</div>';
   }).join('');
 }
@@ -2508,7 +2502,31 @@ function renderLegend(){
       +statsHtml
       +'</div>';
   });
-  leg.innerHTML='<div id="legend-stub">'+items+'</div>';
+  if(isMobile()){
+    // Split into two rows on mobile
+    var typeList=types.slice();
+    var half=Math.ceil(typeList.length/2);
+    var row1=typeList.slice(0,half);
+    var row2=typeList.slice(half);
+    function mkItems(arr){
+      return arr.map(function(t){
+        var c=typeColor(t,p);
+        var isActive=activeTypeFilters.has(t);
+        var itemStyle='cursor:pointer;border-radius:var(--rsm);padding:2px 6px;transition:background .15s;display:flex;align-items:center;gap:5px;font-size:11px;'+(isActive?'background:rgba(79,110,247,.15);outline:1.5px solid var(--accent);':'');
+        return '<div class="lg-item lg-clickable" data-type="'+t.replace(/"/g,'&quot;')+'" style="'+itemStyle+'">'
+          +'<div class="lg-dot" style="background:'+c+';width:10px;height:10px;border-radius:2px;flex-shrink:0"></div>'
+          +'<span style="'+(isActive?'font-weight:700;color:var(--accent);':'')+'">'+t+'</span>'
+          +'</div>';
+      }).join('');
+    }
+    leg.innerHTML='<div id="legend-stub" style="display:flex;flex-direction:column;gap:2px;padding:3px 8px;align-items:flex-start;width:100%;">'
+      +'<div style="display:flex;align-items:center;gap:4px;justify-content:flex-start;">'+mkItems(row1)+'</div>'
+      +(row2.length?'<div style="display:flex;align-items:center;gap:4px;justify-content:flex-start;">'+mkItems(row2)+'</div>':'')
+      +'</div>';
+  } else {
+    leg.innerHTML='<div id="legend-stub">'+items+'</div>';
+  }
+
   // Attach click via delegation
   var stub=document.getElementById('legend-stub');
   if(stub){
@@ -3640,7 +3658,7 @@ setTimeout(function(){renderIconGrid(ICONS[0]);},200);
     for(var i=0;i<_hsEls.length;i++)_hsEls[i].style.transform=t;
     for(var i=0;i<_ovEls.length;i++)_ovEls[i].style.transform=t;
     var ls=document.getElementById('legend-stub');
-    if(ls)ls.style.transform=t;
+    if(ls&&!isMobile())ls.style.transform=t;
   }
 
   // Invalidate cache after every render
