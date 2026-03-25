@@ -242,6 +242,18 @@ input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:4px;
 input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:18px;height:18px;border-radius:50%;background:var(--accent);border:3px solid var(--surface);box-shadow:0 1px 6px rgba(0,0,0,.2);cursor:pointer;transition:transform .15s}
 input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.2)}
 input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--accent);border:3px solid var(--surface);box-shadow:0 1px 6px rgba(0,0,0,.2);cursor:pointer}
+@media(max-width:768px){
+  :root{--sw:110px!important;}
+  #plbl,#qnav,#btn-ev,#btn-sc,#dd-files{display:none!important;}
+  #sb,#sb-toggle{display:none!important;}
+  .rl{font-size:9px!important;padding:3px 6px!important;align-items:center!important;justify-content:flex-end!important;text-align:right!important;height:auto!important;overflow:hidden!important;line-height:1.3!important;}
+  .ls{display:-webkit-box!important;-webkit-line-clamp:2!important;-webkit-box-orient:vertical!important;overflow:hidden!important;text-overflow:ellipsis!important;font-size:9px!important;text-align:right!important;max-width:100%!important;white-space:normal!important;line-height:1.3!important;}
+  .grow{height:auto!important;}
+  .sc-acts{display:none!important;}
+  .dh{display:none!important;}
+  .md{width:95vw!important;max-width:95vw!important;}
+  #tb{padding:0 8px;gap:6px;}
+}
 </style>
 </head>
 <body data-theme="light">
@@ -879,18 +891,40 @@ function init(){
     }
   });
   fmSel('sm',1);fmSel('em',1);fmSel('evm1',1);fmSel('evm2',1);
+  if(isMobile())document.documentElement.style.setProperty('--sw','110px');
   // Try auto-load data.json from same folder
-  fetch('data.json?_='+Date.now())
-    .then(function(r){if(!r.ok)throw new Error('not found');return r.json();})
-    .then(function(imported){
-      if(!imported._ganttmator)return;
-      onJIData(imported);
-      toast('data.json נטען אוטומטית ✓');
-    })
-    .catch(function(){rAll();});
+  try{
+    fetch('data.json?_='+Date.now())
+      .then(function(r){if(!r.ok)throw new Error('not found');return r.json();})
+      .then(function(imported){
+        if(imported._ganttmator)onJIData(imported);
+        rAll();
+        if(imported._ganttmator)toast('data.json נטען אוטומטית ✓');
+      })
+      .catch(function(){rAll();});
+  }catch(e){rAll();}
 }
 
 function save(){localStorage.setItem('g5',JSON.stringify(S));}
+function isMobile(){return window.innerWidth<=768;}
+function calcMobileSW(p){
+  var canvas=document.createElement('canvas');
+  var ctx=canvas.getContext('2d');
+  ctx.font='700 9px Heebo,sans-serif';
+  var min=50,max=110,longest=min;
+  (p.scopes||[]).forEach(function(sc){
+    var w=ctx.measureText(sc.name).width+16;
+    if(w>longest)longest=w;
+  });
+  return Math.min(max,Math.ceil(longest));
+}
+window.addEventListener('resize',function(){
+  _cachedSW=0;
+  var sw=isMobile()?110:240;
+  document.documentElement.style.setProperty('--sw',sw+'px');
+  var sbBody=document.getElementById('sb-body');
+  if(sbBody)sbBody.style.width=sw+'px';
+});
 function pr(){return S.projects.find(function(p){return p.id===S.activeId;})||null;}
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
 
@@ -1060,7 +1094,7 @@ function rBody(p){
   var vr=viewRange();
 
   // Sidebar width fixed — no dynamic recalculation
-  var sw=240;
+  var sw=isMobile()?110:240;
   if(sw!==_cachedSW){
     _cachedSW=sw;
     document.documentElement.style.setProperty('--sw',sw+'px');
@@ -1165,7 +1199,12 @@ function rBody(p){
     var scRowH=count*barH;
     scRowH=Math.max(barH,scRowH);
     var scRow=mkRow(false);
-    scRow.style.height=scRowH+'px';scRow.style.minHeight=scRowH+'px';scRow.style.maxHeight=scRowH+'px';
+    if(isMobile()){
+      scRow.style.minHeight=scRowH+'px';
+      scRow.style.height='auto';
+    } else {
+      scRow.style.height=scRowH+'px';scRow.style.minHeight=scRowH+'px';scRow.style.maxHeight=scRowH+'px';
+    }
 
     // Topic side bar class - all valid topics get overlay
     var topicIds2=(p.topics||[]).map(function(t){return t.id;});
@@ -1608,7 +1647,7 @@ function drawDeps(p){
   }
 }
 
-function onEvBMD(e,evId){
+function onEvBMD(e,evId){if(isMobile())return;
   var isR=e.target.classList.contains('rh');
   var p=pr();if(!p)return;
   var ev=(p.events||[]).find(function(x){return x.id===evId;});
@@ -1618,7 +1657,7 @@ function onEvBMD(e,evId){
   e.stopPropagation();e.preventDefault();
 }
 
-function onBMD(e,tk,scid){
+function onBMD(e,tk,scid){if(isMobile())return;
   var isR=e.target.classList.contains('rh');
   var side=isR?(e.target.classList.contains('rhs')?'s':'e'):null;
   // Block start-side resize if task has dep (rhs = start in RTL) — handle is hidden in UI anyway
@@ -1795,7 +1834,7 @@ function propagateDeps(p){
   }
 }
 
-function onCell(col,id,type){
+function onCell(col,id,type){if(isMobile())return;
   if(type==='sc'){
     var pos=colToAbs(col);
     if(pos)oTk(null,id,pos);
@@ -1803,7 +1842,7 @@ function onCell(col,id,type){
     oEv();
   }
 }
-function onHW(col){
+function onHW(col){if(isMobile())return;
   // Click on week header - open new task with pre-filled position
   // Need to pick the first scope if available
   var pos=colToAbs(col);
