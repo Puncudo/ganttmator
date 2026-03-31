@@ -1638,7 +1638,7 @@ function drawTopicSpines(p){
     rows[rows.length-1].style.marginBottom='';
 
     // One element spanning all rows - with 3px inset top/bottom
-    var inset=3;
+    var inset=2;
     var top=rows[0].offsetTop + inset;
     var height=rows.reduce(function(s,r){return s+r.offsetHeight;},0) - inset*2;
     if(height<=0)return;
@@ -1656,16 +1656,13 @@ function drawTopicSpines(p){
     ov.appendChild(inner);
     ov.dataset.tid=tid;
 
-    if(!isNone){
-      (function(t){
-        ov.style.pointerEvents='auto';
-        ov.style.cursor='pointer';
-        ov.title='לחץ לסינון נושא';
-        // Restore selection state
-        if(selectedTopics.has(t)) ov.style.outline='2px solid rgba(255,255,255,.8)';
-        ov.addEventListener('click',function(){toggleTopicSelect(t);});
-      })(tid);
-    }
+    (function(t){
+      ov.style.pointerEvents='auto';
+      ov.style.cursor='pointer';
+      ov.title='לחץ לסינון נושא';
+      if(selectedTopics.has(t)) ov.style.outline='2px solid rgba(255,255,255,.8)';
+      ov.addEventListener('click',function(){toggleTopicSelect(t);});
+    })(tid);
     gb.appendChild(ov);
   });
   // Restore visual state
@@ -2006,10 +2003,16 @@ function _scInfoHTML(scId){
   var p=pr();if(!p)return'';
   var sc=p.scopes.find(function(s){return s.id===scId;});
   if(!sc)return'';
+  var topicObj=sc.topicId?(p.topics||[]).find(function(t){return t.id===sc.topicId;}):null;
+  var topicName=topicObj&&!topicObj.isNone?topicObj.name:'';
+  var header='<div style="margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border)">'
+    +'<div style="font-size:13px;font-weight:800;color:var(--accent)">'+sc.name+'</div>'
+    +(topicName?'<div style="font-size:11px;font-weight:600;color:var(--accent);opacity:.75;margin-top:2px">'+topicName+'</div>':'')
+    +'</div>';
   var parts=[];
-  if(sc.desc)parts.push('<div style="font-weight:700;color:var(--text);margin-bottom:4px;font-size:12px">תיאור</div><div>'+sc.desc+'</div>');
-  if(sc.notes)parts.push((sc.desc?'<div style="margin-top:8px">':'')+'<div style="font-weight:700;color:var(--text);margin-bottom:4px;font-size:12px">הערות</div><div>'+sc.notes+'</div>'+(sc.desc?'</div>':''));
-  return parts.join('');
+  if(sc.desc)parts.push('<div style="font-weight:700;color:var(--text);margin-bottom:4px;font-size:11px">תיאור</div><div style="font-size:12px">'+sc.desc+'</div>');
+  if(sc.notes)parts.push((sc.desc?'<div style="margin-top:8px">':'')+'<div style="font-weight:700;color:var(--text);margin-bottom:4px;font-size:11px">הערות</div><div style="font-size:12px">'+sc.notes+'</div>'+(sc.desc?'</div>':''));
+  return parts.length?header+parts.join(''):'';
 }
 function showScInfoTT(btn,scId){
   if(isMobile())return;
@@ -2034,7 +2037,11 @@ function showScInfo(btn,scId){
   var sc=p.scopes.find(function(s){return s.id===scId;});if(!sc)return;
   var body=document.getElementById('sc-info-body');
   var title=document.getElementById('sc-info-title');
-  title.textContent=sc.name;
+  var topicObj=sc.topicId?(p.topics||[]).find(function(t){return t.id===sc.topicId;}):null;
+  var topicName=topicObj&&!topicObj.isNone?topicObj.name:'';
+  title.innerHTML='<span style="color:var(--accent);font-weight:800">'+sc.name+'</span>'
+    +(topicName?'<span style="color:var(--accent);opacity:.75;font-size:12px;font-weight:600;margin-right:6px"> · '+topicName+'</span>':'')
+    +' <button class="mdc" onclick="cMo(\'mo-sc-info\')">&#10005;</button>';
   var txt='';
   if(sc.desc)txt+='תיאור:\n'+sc.desc;
   if(sc.notes)txt+=(txt?'\n\n':'')+'הערות:\n'+sc.notes;
@@ -2455,7 +2462,7 @@ function onStartChange(){
   filterEndFields();
 }
 
-function filterEndFields(preserveEnd){
+function filterEndFields(targetEM,targetEW){
   var startAbs=_getStartAbs();
   var sy=+document.getElementById('sy').value;
   var eySel=document.getElementById('ey');
@@ -2464,14 +2471,13 @@ function filterEndFields(preserveEnd){
   if(!eySel||!emSel||!ewSel)return;
 
   var curEY=+eySel.value||sy;
-  var curEM=+emSel.value||1;
-  var curEW=+ewSel.value||1;
+  var curEM=targetEM||(+emSel.value)||1;
+  var curEW=targetEW||(+ewSel.value)||1;
 
   // Rebuild ey options — disable years before start year
   var eyOpts='';
   for(var y=2020;y<=2040;y++){
-    var dis=y<sy?' disabled':'';
-    eyOpts+='<option value="'+y+'"'+dis+'>'+y+'</option>';
+    eyOpts+='<option value="'+y+'"'+(y<sy?' disabled':'')+'>'+y+'</option>';
   }
   eySel.innerHTML=eyOpts;
   // Restore ey — clamp to start year minimum
@@ -2483,39 +2489,37 @@ function filterEndFields(preserveEnd){
   for(var mi=1;mi<=12;mi++){
     var mq=Math.ceil(mi/3); var ml=mi-(mq-1)*3;
     var testAbs=aw(ey,mq,ml,4);
-    var dis2=testAbs<startAbs?' disabled':'';
-    emOpts+='<option value="'+mi+'"'+dis2+'>'+mi+' - '+MO[mi-1]+'</option>';
+    emOpts+='<option value="'+mi+'"'+(testAbs<startAbs?' disabled':'')+'>'+mi+' - '+MO[mi-1]+'</option>';
   }
   emSel.innerHTML=emOpts;
 
-  // Restore or clamp em
+  // Restore or clamp em: find first non-disabled value >= curEM
   var emVal=curEM;
-  var found=false;
+  var emFound=false;
   for(var i=0;i<emSel.options.length;i++){
-    if(!emSel.options[i].disabled&&+emSel.options[i].value>=curEM){emVal=+emSel.options[i].value;found=true;break;}
+    if(!emSel.options[i].disabled&&+emSel.options[i].value>=curEM){emVal=+emSel.options[i].value;emFound=true;break;}
   }
-  if(!found)for(var i=0;i<emSel.options.length;i++){if(!emSel.options[i].disabled){emVal=+emSel.options[i].value;break;}}
-  emSel.value=emVal;
+  if(!emFound)for(var i=0;i<emSel.options.length;i++){if(!emSel.options[i].disabled){emVal=+emSel.options[i].value;break;}}
+  emSel.value=emVal;  // set BEFORE building ew
   syncQFromM('eq','em');
 
-  // Rebuild ew options — disable weeks that make end < start
+  // Rebuild ew using the NOW-CORRECT emSel.value
   var _emGv=+emSel.value||1;
   var _eqv=Math.ceil(_emGv/3)||1; var _emv=_emGv-(_eqv-1)*3||1;
   var ewOpts='';
   for(var w=1;w<=4;w++){
     var testAbs2=aw(ey,_eqv,_emv,w);
-    var dis3=testAbs2<startAbs?' disabled':'';
-    ewOpts+='<option value="'+w+'"'+dis3+'>'+w+'</option>';
+    ewOpts+='<option value="'+w+'"'+(testAbs2<startAbs?' disabled':'')+'>'+w+'</option>';
   }
   ewSel.innerHTML=ewOpts;
 
   // Restore or clamp ew
   var ewVal=curEW;
-  var found2=false;
+  var ewFound=false;
   for(var i=0;i<ewSel.options.length;i++){
-    if(!ewSel.options[i].disabled&&+ewSel.options[i].value>=curEW){ewVal=+ewSel.options[i].value;found2=true;break;}
+    if(!ewSel.options[i].disabled&&+ewSel.options[i].value>=curEW){ewVal=+ewSel.options[i].value;ewFound=true;break;}
   }
-  if(!found2)for(var i=0;i<ewSel.options.length;i++){if(!ewSel.options[i].disabled){ewVal=+ewSel.options[i].value;break;}}
+  if(!ewFound)for(var i=0;i<ewSel.options.length;i++){if(!ewSel.options[i].disabled){ewVal=+ewSel.options[i].value;break;}}
   ewSel.value=ewVal;
 }
 
@@ -2731,9 +2735,9 @@ function onDurChange(){
   // Set hidden end fields
   document.getElementById('ey').value=ep.year;
   document.getElementById('eq').value=ep.q;
-  fmSel('em',ep.q);
-  document.getElementById('em').value=(ep.q-1)*3+ep.m;
-  document.getElementById('ew').value=ep.w;
+  var _epEmG=(ep.q-1)*3+ep.m;
+  filterEndFields(_epEmG,ep.w);
+  document.getElementById('em').value=_epEmG;syncQFromM('eq','em');
   // Show result label - just the computed end date
   var res=document.getElementById('dur-result');
   var _gm=(ep.q-1)*3+ep.m;if(res)res.textContent='Q'+ep.q+' '+MO[_gm-1]+' שבוע '+ep.w+' '+ep.year;
@@ -3168,14 +3172,8 @@ function oTk(tkId,scId,prePos){
       document.getElementById('sy').value=tk.sy;document.getElementById('sq').value=tk.sq;fmSel('sm',tk.sq);document.getElementById('sm').value=(tk.sq-1)*3+tk.sm;document.getElementById('sw').value=tk.sw;
       document.getElementById('ey').value=tk.ey;document.getElementById('eq').value=tk.eq;
       var _tkEmG=(tk.eq-1)*3+tk.em;
-      filterEndFields();
+      filterEndFields(_tkEmG,tk.ew);
       document.getElementById('em').value=_tkEmG;syncQFromM('eq','em');
-      // rebuild ew after em is set so disabled is correct for this week
-      var _tkEqv=tk.eq,_tkEmv=tk.em;
-      var ewSel=document.getElementById('ew');
-      var startAbs2=_getStartAbs();
-      var ewHtml='';for(var _w=1;_w<=4;_w++){var _ta=aw(tk.ey,_tkEqv,_tkEmv,_w);ewHtml+='<option value="'+_w+'"'+(_ta<startAbs2?' disabled':'')+'>'+_w+'</option>';}
-      ewSel.innerHTML=ewHtml;ewSel.value=tk.ew;
       document.getElementById('tkdep').value=tk.depId||'';
       document.getElementById('ipr').value=tk.progress||0;document.getElementById('prv').textContent=(tk.progress||0)+'%';
       updProgBar(tk.progress||0);
@@ -3188,14 +3186,9 @@ function oTk(tkId,scId,prePos){
     document.getElementById('sy').value=d.year;document.getElementById('sq').value=d.q;fmSel('sm',d.q);document.getElementById('sm').value=(d.q-1)*3+(d.m||1);document.getElementById('sw').value=d.w||1;
     document.getElementById('ey').value=d.year;document.getElementById('eq').value=d.q;
     var _dEmG=(d.q-1)*3+(d.m||1);
-    filterEndFields();
+    var _ewW=Math.min(4,(d.w||1)+1);
+    filterEndFields(_dEmG,_ewW);
     document.getElementById('em').value=_dEmG;syncQFromM('eq','em');
-    var _dEqv=d.q,_dEmv=d.m||1;
-    var ewSel2=document.getElementById('ew');
-    var startAbs3=_getStartAbs();
-    var ewW=Math.min(4,(d.w||1)+1);
-    var ewHtml2='';for(var _w2=1;_w2<=4;_w2++){var _ta2=aw(d.year,_dEqv,_dEmv,_w2);var _dis2=_ta2<startAbs3?' disabled':'';ewHtml2+='<option value="'+_w2+'"'+_dis2+'>'+_w2+'</option>';}
-    ewSel2.innerHTML=ewHtml2;ewSel2.value=ewW;
     document.getElementById('tkdep').value='';document.getElementById('ipr').value=0;document.getElementById('prv').textContent='0%';updProgBar(0);document.getElementById('itkno').value='';
     if(!scId&&p.scopes.length>0)eTkScId=p.scopes[0].id;
     else if(!scId){toast('יש ליצור תכולה');cMo('mo-tk');oSc();return;}
