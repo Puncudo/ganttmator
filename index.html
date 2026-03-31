@@ -371,6 +371,14 @@ input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;bac
 </div>
 
 <div id="tt"></div>
+<div id="sc-tt" style="position:fixed;z-index:601;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shl);padding:12px 14px;max-width:260px;pointer-events:none;display:none;font-size:12px;line-height:1.55;color:var(--text2)"></div>
+<!-- mobile scope info modal -->
+<div class="mo" id="mo-sc-info" onclick="if(event.target===this)cMo('mo-sc-info')">
+  <div class="md" style="max-width:340px">
+    <div class="mdt" id="sc-info-title">תיאור תכולה <button class="mdc" onclick="cMo('mo-sc-info')">&#10005;</button></div>
+    <div id="sc-info-body" style="font-size:13px;line-height:1.65;color:var(--text2);white-space:pre-wrap"></div>
+  </div>
+</div>
 <div id="drag-tt"></div>
 <div id="toast"><span id="toast-icon">✓</span><span id="toast-msg"></span><button id="toast-undo" onclick="doUndo()">↩ בטל</button><div id="toast-bar"></div></div>
 
@@ -447,12 +455,28 @@ input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;bac
 
 <!-- SCOPE -->
 <div class="mo" id="mo-sc">
-  <div class="md">
+  <div class="md" style="width:720px;max-width:96vw">
     <div class="mdt" id="sc-title">תכולה חדשה <button class="mdc" onclick="cMo('mo-sc')">&#10005;</button></div>
     <input type="hidden" id="scid"/>
-    <div class="fi"><label>שם התכולה</label><input id="iscn" placeholder="שם התכולה..."/></div>
-    <div class="fi"><label>נושא</label><select id="sctopic"><option value="">ללא נושא</option></select></div>
-    <div class="fi"><label>שיוך לאדם</label><select id="scper"><option value="">ללא שיוך</option></select></div>
+    <div style="display:flex;gap:16px;align-items:stretch">
+      <!-- right column (RTL first): name + topic + person -->
+      <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+        <div class="fi"><label>שם התכולה</label><input id="iscn" placeholder="שם התכולה..."/></div>
+        <div class="fi"><label>נושא</label><select id="sctopic"><option value="">ללא נושא</option></select></div>
+        <div class="fi"><label>שיוך לאדם</label><select id="scper"><option value="">ללא שיוך</option></select></div>
+      </div>
+      <!-- left column (RTL second): desc + notes half/half -->
+      <div style="flex:1;display:flex;flex-direction:column;gap:10px;min-width:0">
+        <div class="fi" style="flex:1;display:flex;flex-direction:column;margin:0">
+          <label>תיאור תכולה</label>
+          <textarea id="iscd" placeholder="תיאור קצר של התכולה..." style="resize:none;flex:1;min-height:90px"></textarea>
+        </div>
+        <div class="fi" style="flex:1;display:flex;flex-direction:column;margin:0">
+          <label>הערות</label>
+          <textarea id="iscnotes" placeholder="הערות נוספות..." style="resize:none;flex:1;min-height:90px"></textarea>
+        </div>
+      </div>
+    </div>
     <div class="mdf">
       <button class="btn bp" onclick="sSc()">שמור</button>
       <button class="btn bg" onclick="cMo('mo-sc')">ביטול</button>
@@ -1230,6 +1254,7 @@ function rBody(p){
       +'<div style="flex:1;min-width:0">'+(personName?'<div style="font-size:10px;color:var(--text3)">'+personName+'</div>':'')
       +'<div class="ls" onclick="event.stopPropagation();toggleScopeSelect(\''+sc.id+'\')" title="לחץ לסימון תכולה">'+sc.name+'</div></div>'
       +'<div class="sc-acts"><button class="ib" onclick="event.stopPropagation();oSc(\''+sc.id+'\')" title="ערוך תכולה">✏️</button><button class="ib" onclick="event.stopPropagation();oTk(null,\''+sc.id+'\')" title="הוסף משימה">＋</button></div>'
+      +(sc.desc||sc.notes?'<button class="sc-info-btn" onclick="event.stopPropagation();showScInfo(this,\''+sc.id+'\')" onmouseenter="showScInfoTT(this,\''+sc.id+'\')" onmouseleave="hideScInfoTT()" style="background:none;border:none;cursor:pointer;padding:0 2px;color:var(--text3);opacity:.5;flex-shrink:0;display:flex;align-items:center"><svg width=\"10\" height=\"10\" viewBox=\"0 0 12 12\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><circle cx=\"6\" cy=\"6\" r=\"5.25\"/><path d=\"M6 8.5v.01\" stroke-linecap=\"round\"/><path d=\"M6 6.8c0-1.3 1.5-1.1 1.5-2.3a1.5 1.5 0 10-3 0\" stroke-linecap=\"round\"/></svg></button>':'')
       +'<span class="dh" style="cursor:grab;opacity:.5;font-size:13px;padding:0 3px 0 6px;user-select:none;flex-shrink:0">&#8285;</span>';
 
     // hlTopic only via overlay hover (not row hover)
@@ -1269,6 +1294,19 @@ function rBody(p){
         sDragFrom=null;row.draggable=false;row.style.opacity='';
         document.querySelectorAll('.grow').forEach(function(r){r.classList.remove('scope-drop-active');});
       });
+      // Long press on mobile to show scope info
+      var _lpTimer=null;
+      row.addEventListener('touchstart',function(e){
+        var p2=pr();if(!p2)return;
+        var sc2=p2.scopes.find(function(s){return s.id===scid;});
+        if(!sc2||(!sc2.desc&&!sc2.notes))return;
+        _lpTimer=setTimeout(function(){
+          _lpTimer=null;
+          showScInfo(null,scid);
+        },500);
+      },{passive:true});
+      row.addEventListener('touchend',function(){if(_lpTimer){clearTimeout(_lpTimer);_lpTimer=null;}});
+      row.addEventListener('touchmove',function(){if(_lpTimer){clearTimeout(_lpTimer);_lpTimer=null;}});
     })(scRow,scIdx,sc.id);
     scIdx++;
     var scRc=scRow.querySelector('.rc');
@@ -1964,6 +2002,45 @@ function onHW(col){if(isMobile())return;
   }
 }
 
+function _scInfoHTML(scId){
+  var p=pr();if(!p)return'';
+  var sc=p.scopes.find(function(s){return s.id===scId;});
+  if(!sc)return'';
+  var parts=[];
+  if(sc.desc)parts.push('<div style="font-weight:700;color:var(--text);margin-bottom:4px;font-size:12px">תיאור</div><div>'+sc.desc+'</div>');
+  if(sc.notes)parts.push((sc.desc?'<div style="margin-top:8px">':'')+'<div style="font-weight:700;color:var(--text);margin-bottom:4px;font-size:12px">הערות</div><div>'+sc.notes+'</div>'+(sc.desc?'</div>':''));
+  return parts.join('');
+}
+function showScInfoTT(btn,scId){
+  if(isMobile())return;
+  var html=_scInfoHTML(scId);if(!html)return;
+  var tt=document.getElementById('sc-tt');
+  tt.innerHTML=html;
+  tt.style.display='block';
+  var r=btn.getBoundingClientRect();
+  var x=r.left-tt.offsetWidth-8;
+  if(x<8)x=r.right+8;
+  var y=r.top-tt.offsetHeight/2+r.height/2;
+  y=Math.max(8,Math.min(y,window.innerHeight-tt.offsetHeight-8));
+  tt.style.left=x+'px';tt.style.top=y+'px';
+}
+function hideScInfoTT(){
+  var tt=document.getElementById('sc-tt');
+  if(tt)tt.style.display='none';
+}
+function showScInfo(btn,scId){
+  if(!isMobile())return;
+  var p=pr();if(!p)return;
+  var sc=p.scopes.find(function(s){return s.id===scId;});if(!sc)return;
+  var body=document.getElementById('sc-info-body');
+  var title=document.getElementById('sc-info-title');
+  title.textContent=sc.name;
+  var txt='';
+  if(sc.desc)txt+='תיאור:\n'+sc.desc;
+  if(sc.notes)txt+=(txt?'\n\n':'')+'הערות:\n'+sc.notes;
+  body.textContent=txt;
+  oMo('mo-sc-info');
+}
 function showTT(e,tk,person,p){
   var tt=document.getElementById('tt');
   var tColor=taskColor(tk,p);
@@ -2504,8 +2581,8 @@ function oSc(id){
   document.getElementById('scdel').style.display=id?'inline-flex':'none';
   document.getElementById('scper').innerHTML='<option value="">ללא שיוך</option>'+p.people.map(function(x){return'<option value="'+x.id+'">'+resName(x)+'</option>';}).join('');
   document.getElementById('sctopic').innerHTML=(p.topics||[]).map(function(t){return'<option value="'+t.id+'">'+t.name+'</option>';}).join('');
-  if(id){var sc=p.scopes.find(function(s){return s.id===id;});if(sc){document.getElementById('iscn').value=sc.name;document.getElementById('scper').value=sc.personId||'';document.getElementById('sctopic').value=sc.topicId||NONE_ID;}}
-  else{document.getElementById('iscn').value='';document.getElementById('scper').value='';document.getElementById('sctopic').value=NONE_ID;}
+  if(id){var sc=p.scopes.find(function(s){return s.id===id;});if(sc){document.getElementById('iscn').value=sc.name;document.getElementById('iscd').value=sc.desc||'';document.getElementById('iscnotes').value=sc.notes||'';document.getElementById('scper').value=sc.personId||'';document.getElementById('sctopic').value=sc.topicId||NONE_ID;}}
+  else{document.getElementById('iscn').value='';document.getElementById('iscd').value='';document.getElementById('iscnotes').value='';document.getElementById('scper').value='';document.getElementById('sctopic').value=NONE_ID;}
   oMo('mo-sc');
 }
 function sSc(){
@@ -2515,9 +2592,9 @@ function sSc(){
   var topicVal=document.getElementById('sctopic').value||NONE_ID;
   if(eScId){
     var sc=p.scopes.find(function(s){return s.id===eScId;});
-    if(sc){sc.name=n;sc.personId=document.getElementById('scper').value||null;sc.topicId=topicVal;}
+    if(sc){sc.name=n;sc.desc=document.getElementById('iscd').value.trim();sc.notes=document.getElementById('iscnotes').value.trim();sc.personId=document.getElementById('scper').value||null;sc.topicId=topicVal;}
   } else {
-    p.scopes.push({id:uid(),name:n,personId:document.getElementById('scper').value||null,topicId:topicVal,tasks:[]});
+    p.scopes.push({id:uid(),name:n,desc:document.getElementById('iscd').value.trim(),notes:document.getElementById('iscnotes').value.trim(),personId:document.getElementById('scper').value||null,topicId:topicVal,tasks:[]});
   }
   // Re-group: sort scopes so same-topic scopes are contiguous (keep relative order within topic)
   if(topicVal){
