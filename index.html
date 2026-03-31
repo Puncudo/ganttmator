@@ -1079,7 +1079,9 @@ function rAll(){
   rHdr();renderLegend();rBody(p);rPList();rTypeList();rTopicList();rXlsCols();
   requestAnimationFrame(function(){
     if(gw){gw.scrollLeft=savedSL;gw.scrollTop=savedST;}
-    if(window._fixCols)window._fixCols();
+    requestAnimationFrame(function(){
+      if(window._fixCols)window._fixCols();
+    });
   });
 }
 
@@ -1338,12 +1340,19 @@ function rBody(p){
   requestAnimationFrame(function(){
     requestAnimationFrame(function(){
       drawDeps(p);
-      setTimeout(function(){
-        drawTopicSpines(p);
-      },0);
       var gb=document.getElementById('gb');
       if(gb&&hideTopicRows)gb.classList.add('topics-hidden');
-      if(window._fixCols)window._fixCols();
+      setTimeout(function(){
+        drawTopicSpines(p);
+        // Re-apply transforms to newly created topic-overlays
+        var gw=document.getElementById('gw');
+        if(gw){
+          var sl=gw.scrollLeft;
+          var t='translateX('+sl+'px)';
+          document.querySelectorAll('.topic-overlay').forEach(function(el){el.style.transform=t;});
+        }
+        if(window._fixCols)window._fixCols();
+      },0);
       updateColFilterUI();
       applyTypeFilter();
     });
@@ -1726,6 +1735,14 @@ function onBMD(e,tk,scid){if(isMobile())return;
   while(el&&!el.classList.contains('gc'))el=el.parentElement;
   if(el&&el.dataset.col!==undefined)startCol=parseInt(el.dataset.col);
   drag={mode:isR?'resize':'drag',type:'task',tid:tk.id,scid:scid,side:side,sx:e.clientX,origCol:startCol,lastDCells:0,orig:{sy:tk.sy,sq:tk.sq,sm:tk.sm,sw:tk.sw,ey:tk.ey,eq:tk.eq,em:tk.em,ew:tk.ew},moved:false};
+  // If task has a dep and we're dragging (not resizing end), freeze lines at current bar position
+  if(tk.depId&&!isR){
+    var _origBar=document.getElementById('b-'+tk.id);
+    if(_origBar){
+      // Create a lightweight proxy with frozen cs/ce
+      drag.lockedBar={dataset:{cs:_origBar.dataset.cs,ce:_origBar.dataset.ce}};
+    }
+  }
   e.stopPropagation();
 }
 
@@ -1791,7 +1808,7 @@ function onMM(e){
   if(drag.type==='task'){
     var bar=document.getElementById('b-'+drag.tid);
     if(bar){
-      updateDragLines(bar);
+      updateDragLines(drag.lockedBar||bar);
     }
     var p2=pr();
     if(p2){
@@ -1946,7 +1963,11 @@ function onMU(){
     var p=pr();
     if(p)propagateDeps(p);
     drag=null;
-    save();rAll();toast('משימה הוזזה',true,'move');
+    save();
+    // Update only bars and deps — avoid full rAll which causes topic-overlay flash
+    redrawBars();
+    var _p=pr();if(_p)drawDeps(_p);
+    toast('משימה הוזזה',true,'move');
   }
 }
 
@@ -3956,7 +3977,7 @@ setTimeout(function(){renderIconGrid(ICONS[0]);},200);
   // Invalidate cache after every render
   function fixColsRefresh(){
     _rlEls=null;_hsEls=null;_ovEls=null;
-    lastSL=-1;
+    lastSL=gw.scrollLeft+1; // force re-run even if sl unchanged
     fixCols();
   }
 
@@ -3971,6 +3992,11 @@ setTimeout(function(){renderIconGrid(ICONS[0]);},200);
       if(!_rlEls)_rlEls=document.querySelectorAll('.rl');
       for(var i=0;i<_rlEls.length;i++){
         if(_rlEls[i].style.transform!==t)_rlEls[i].style.transform=t;
+      }
+      // topic-overlays are recreated on render - always re-stamp them during drag
+      var ovs=document.querySelectorAll('.topic-overlay');
+      for(var j=0;j<ovs.length;j++){
+        if(ovs[j].style.transform!==t)ovs[j].style.transform=t;
       }
     }
     requestAnimationFrame(dragFixLoop);
