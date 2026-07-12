@@ -254,7 +254,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;
 input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.2)}
 input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--accent);border:3px solid var(--surface);box-shadow:0 1px 6px rgba(0,0,0,.2);cursor:pointer}
 @media(max-width:768px){
-  #qnav,#btn-ev,#btn-sc,#dd-files{display:none!important;}
+  #qnav,#btn-sc,#dd-files{display:none!important;}
   #sb,#sb-toggle{display:none!important;}
   #plbl{display:inline-flex!important;width:auto!important;min-width:0!important;max-width:calc(100vw - 120px)!important;}
   /* Legend wraps on mobile */
@@ -325,8 +325,8 @@ input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;bac
     <select id="numqsel" title="כמה רבעונים להצגה" onchange="setNumQ(this.value)" style="font-family:'Heebo',sans-serif;font-size:12px;font-weight:700;background:var(--surface2) url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%228%22 height=%225%22><path d=%22M0 0l4 5 4-5z%22 fill=%22%236b7a99%22/></svg>') no-repeat 3px center;border:1px solid var(--border);border-radius:5px;color:var(--text);cursor:pointer;padding:2px 6px 2px 18px;outline:none;width:52px;-webkit-appearance:none;appearance:none;direction:ltr;text-align:right"></select>
     <span style="font-size:11px;color:var(--text3);white-space:nowrap">רבעונים</span>
   </div>
-  <button id="btn-ev" class="btn bg bs" onclick="oEv()" title="אירוע חדש" style="display:none">📌</button>
-  <button id="btn-sc" class="btn bp bs" onclick="oSc()" title="תכולה חדשה" style="display:none">📦</button>
+  <div class="sp"></div>
+  <button id="btn-sc" class="btn bp bs" onclick="oSc()" title="תכולה חדשה" style="display:none">📦 תכולה חדשה</button>
   <div id="dd-files" class="dd" style="display:none">
     <button class="btn bg bs" id="expbtn" onclick="tDD()">📤 קבצים ▾</button>
     <div class="ddm" id="expmenu">
@@ -550,7 +550,7 @@ input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;bac
       <!-- right column (RTL first): name + topic + person -->
       <div style="flex:1;display:flex;flex-direction:column;min-width:0">
         <div class="fi"><label>שם התכולה</label><input id="iscn" placeholder="שם התכולה..."/></div>
-        <div class="fi"><label>נושא</label><select id="sctopic"><option value="">ללא נושא</option></select></div>
+        <div class="fi"><label>נושא</label><select id="sctopic" onchange="scTopicChanged()"><option value="">ללא נושא</option></select></div>
         <div class="fi"><label>שיוך לאדם</label><select id="scper"><option value="">ללא שיוך</option></select></div>
       </div>
       <!-- left column (RTL second): desc + notes half/half -->
@@ -991,6 +991,8 @@ function fbCreateGantt(name){
 
 function fbSaveVersion(silent){
   if(!currentGanttId)return Promise.resolve();
+  // Guard: never persist an empty board — this would overwrite real data with a blank version.
+  if(!S.projects||S.projects.length===0){if(!silent)toast('אין מה לשמור (גאנט ריק)');return Promise.resolve();}
   var now=new Date();
   var data=JSON.parse(JSON.stringify(S));
   data._savedAt=now.toISOString();
@@ -1030,11 +1032,17 @@ function fbEnforceMaxVersions(){
 
 function fbLoadLatestVersion(ganttId){
   return db.collection('gantts').doc(ganttId).collection('versions')
-    .orderBy('savedAt','desc').limit(1).get().then(function(snap){
+    .orderBy('savedAt','desc').limit(20).get().then(function(snap){
       if(snap.empty)return null;
-      var doc=snap.docs[0];
-      var verData=doc.data();
-      return JSON.parse(verData.data);
+      var fallback=null;
+      for(var i=0;i<snap.docs.length;i++){
+        var parsed;
+        try{parsed=JSON.parse(snap.docs[i].data().data);}catch(e){continue;}
+        if(fallback===null)fallback=parsed;
+        // Prefer the newest version that actually has content.
+        if(parsed&&parsed.projects&&parsed.projects.length>0)return parsed;
+      }
+      return fallback;
     });
 }
 
@@ -1106,9 +1114,14 @@ function fbShowPicker(){
             S=data;
             if(!S.vs)S.vs={year:new Date().getFullYear(),q:1,numQ:4};
             saveLocal();
+            rAll();
+            scrollTodayOnLoad();
+            toast(g.name+' נטען ✓');
+          }else{
+            rAll();
+            scrollTodayOnLoad();
+            toast('אין נתונים שמורים לגאנט זה');
           }
-          rAll();
-          toast(g.name+' נטען ✓');
         });
       });
       grid.appendChild(card);
@@ -1421,8 +1434,8 @@ function save(){
   // Persist locally immediately, then auto-save to the cloud silently.
   // The "cloud saved" status only shows when the user presses the cloud button.
   localStorage.setItem('g5',JSON.stringify(S));
-  if(_suppressCloudSave||!currentGanttId)return;
   clearTimeout(_fbSaveTimer);
+  if(_suppressCloudSave||!currentGanttId)return;
   _fbSaveTimer=setTimeout(function(){fbSaveVersion(true);},2000);
 }
 function isMobile(){return window.innerWidth<=768;}
@@ -1491,6 +1504,63 @@ function getTodayCol(){
   var w=Math.min(4,Math.ceil(day/7));
   return posToCol(yr,q,mInQ,w);
 }
+function scrollToTodayCol(){
+  var gw=document.getElementById('gw');if(!gw)return false;
+  var col=getTodayCol();if(col===null)return false;
+  var el=gw.querySelector('.hw[data-cs="'+col+'"]');
+  if(!el)return false;
+  if(el.scrollIntoView)el.scrollIntoView({inline:'center',block:'nearest'});
+  return true;
+}
+// On load, scroll so the current month sits as close as possible to the start
+// (the leading/right edge in this RTL timeline), clamped to the scroll range.
+var _todayScrollTimer=null;
+var _todayResizeTimer=null;
+function scrollCurrentMonthToStart(){
+  var gw=document.getElementById('gw');if(!gw)return;
+  var gr0=document.getElementById('gr');
+  var now=new Date();
+  var yr=now.getFullYear(),mo=now.getMonth()+1,q=Math.ceil(mo/3),mInQ=((mo-1)%3)+1;
+  var col=(typeof posToCol==='function')?posToCol(yr,q,mInQ,1):null; // first week of current month
+  if(col===null)col=getTodayCol();
+  if(col===null)return;
+  var el=gw.querySelector('.hw[data-cs="'+col+'"]');
+  if(!el)return;
+  // The timeline's real start edge is where the earliest column (cs=0) rests,
+  // NOT the container edge (a sticky label/overlay covers the right side).
+  var startCell=gw.querySelector('.hw[data-cs="0"]');
+  // Measure at the natural position (scrollLeft = 0), with no extra padding.
+  if(gr0)gr0.style.paddingInlineEnd='0px';
+  gw.scrollLeft=0;
+  var startEdge=startCell?startCell.getBoundingClientRect().right:gw.getBoundingClientRect().right;
+  var er=el.getBoundingClientRect();
+  var need=startEdge-er.right;           // px the month is left of the start edge
+  if(need<0)need=0;
+  var maxScroll=gw.scrollWidth-gw.clientWidth;
+  // If we can't scroll far enough, add trailing whitespace after the last quarter.
+  if(gr0&&need>maxScroll){
+    gr0.style.paddingInlineEnd=Math.ceil(need-maxScroll)+'px';
+    maxScroll=gw.scrollWidth-gw.clientWidth;
+  }
+  var target=-need;
+  if(target<-maxScroll)target=-maxScroll;
+  if(target>0)target=0;
+  gw.scrollLeft=target;
+}
+// Recompute whitespace + realign when the window/container size changes.
+window.addEventListener('resize',function(){
+  clearTimeout(_todayResizeTimer);
+  _todayResizeTimer=setTimeout(scrollCurrentMonthToStart,150);
+});
+function scrollTodayOnLoad(){
+  clearTimeout(_todayScrollTimer);
+  var attempts=0;
+  (function tick(){
+    attempts++;
+    scrollCurrentMonthToStart();
+    if(attempts<4)_todayScrollTimer=setTimeout(tick,200);
+  })();
+}
 function colToAbs(col){
   var vq=getVQ();
   var qi=Math.floor(col/12);
@@ -1510,7 +1580,7 @@ function viewRange(){
 
 function updNavVis(){
   var hasP=!!pr();
-  var ids=['plbl','qnav','btn-ev','btn-sc','dd-files'];
+  var ids=['plbl','qnav','btn-sc','dd-files'];
   ids.forEach(function(id){
     var el=document.getElementById(id);
     if(el)el.style.display=hasP?(id==='qnav'?'flex':'inline-flex'):'none';
@@ -3036,6 +3106,7 @@ function oMo(id){
 function cMo(id){
   var mo=document.getElementById(id);
   if(!mo)return;
+  if(id==='mo-topic')_topicReturnToScope=false;
   mo.classList.remove('open');
   // Clear text inputs to prevent stale values showing on next open
   mo.querySelectorAll('input[type=text],textarea').forEach(function(el){el.value='';});
@@ -3192,10 +3263,31 @@ function oSc(id){
   document.getElementById('sc-title').innerHTML=(id?'עריכת תכולה':'תכולה חדשה')+' <button class="mdc" onclick="cMo(\'mo-sc\')">&#10005;</button>';
   document.getElementById('scdel').style.display=id?'inline-flex':'none';
   document.getElementById('scper').innerHTML='<option value="">ללא שיוך</option>'+p.people.map(function(x){return'<option value="'+x.id+'">'+resName(x)+'</option>';}).join('');
-  document.getElementById('sctopic').innerHTML=(p.topics||[]).map(function(t){return'<option value="'+t.id+'">'+t.name+'</option>';}).join('');
+  fillScTopics(p);
   if(id){var sc=p.scopes.find(function(s){return s.id===id;});if(sc){document.getElementById('iscn').value=sc.name;document.getElementById('iscd').value=sc.desc||'';document.getElementById('iscnotes').value=sc.notes||'';document.getElementById('scper').value=sc.personId||'';document.getElementById('sctopic').value=sc.topicId||NONE_ID;}}
   else{document.getElementById('iscn').value='';document.getElementById('iscd').value='';document.getElementById('iscnotes').value='';document.getElementById('scper').value='';document.getElementById('sctopic').value=NONE_ID;}
+  _scPrevTopic=document.getElementById('sctopic').value;
   oMo('mo-sc');
+}
+// Build the topic dropdown for the scope modal, including a distinct "new topic" entry.
+function fillScTopics(p){
+  var sel=document.getElementById('sctopic');if(!sel)return;
+  sel.innerHTML=(p.topics||[]).map(function(t){return'<option value="'+t.id+'">'+t.name+'</option>';}).join('')
+    +'<option disabled style="color:var(--text3)">──────────</option>'
+    +'<option value="__newtopic__" style="color:var(--accent);font-weight:700">➕ נושא חדש…</option>';
+}
+// Track last real selection so we can revert after the "new topic" entry is chosen.
+var _scPrevTopic=NONE_ID;
+var _topicReturnToScope=false;
+function scTopicChanged(){
+  var sel=document.getElementById('sctopic');if(!sel)return;
+  if(sel.value==='__newtopic__'){
+    sel.value=_scPrevTopic;            // revert visible selection
+    _topicReturnToScope=true;
+    oTopic();                          // open the existing "new topic" popup
+  }else{
+    _scPrevTopic=sel.value;
+  }
 }
 function sSc(){
   var n=document.getElementById('iscn').value.trim();if(!n){toast('יש להזין שם');return;}
@@ -3240,13 +3332,23 @@ function sTopic(){
   var p=pr();if(!p)return;
   if(!p.topics)p.topics=[];
   snapshot();
+  var newId=null;
   if(eTopicId){
     var t=p.topics.find(function(x){return x.id===eTopicId;});
     if(t)t.name=n;
   } else {
-    p.topics.push({id:uid(),name:n,collapsed:false});
+    newId=uid();
+    p.topics.push({id:newId,name:n,collapsed:false});
   }
+  var returnToScope=_topicReturnToScope;
   save();cMo('mo-topic');rAll();toast(eTopicId?'נושא עודכן':'נושא נוסף',true);
+  // If opened from the scope modal, refresh its dropdown and select the new topic.
+  if(returnToScope){
+    _topicReturnToScope=false;
+    fillScTopics(pr());
+    var sel=document.getElementById('sctopic');
+    if(sel){sel.value=newId||_scPrevTopic;_scPrevTopic=sel.value;}
+  }
 }
 function dTopic(){
   conf('מחיקת נושא','האם למחוק? התכולות ישארו ללא נושא',function(){
@@ -4645,6 +4747,8 @@ function startApp(){
         if(!S.vs)S.vs={year:new Date().getFullYear(),q:1,numQ:4};
         saveLocal();
         rAll();
+        // On load, scroll so the current month's leading edge sits at x=0.
+        scrollTodayOnLoad();
       }else{
         // Gantt no longer exists in cloud — go home
         fbGoHome();
