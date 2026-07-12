@@ -326,6 +326,7 @@ input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;bac
     <span style="font-size:11px;color:var(--text3);white-space:nowrap">רבעונים</span>
   </div>
   <div class="sp"></div>
+  <button id="btn-today" class="btn bg bs" onclick="scrollCurrentMonthToStart()" title="קפוץ לחודש הנוכחי" style="display:none">📅</button>
   <button id="btn-sc" class="btn bp bs" onclick="oSc()" title="תכולה חדשה" style="display:none">📦 תכולה חדשה</button>
   <div id="dd-files" class="dd" style="display:none">
     <button class="btn bg bs" id="expbtn" onclick="tDD()">📤 קבצים ▾</button>
@@ -1580,7 +1581,7 @@ function viewRange(){
 
 function updNavVis(){
   var hasP=!!pr();
-  var ids=['plbl','qnav','btn-sc','dd-files'];
+  var ids=['plbl','qnav','btn-today','btn-sc','dd-files'];
   ids.forEach(function(id){
     var el=document.getElementById(id);
     if(el)el.style.display=hasP?(id==='qnav'?'flex':'inline-flex'):'none';
